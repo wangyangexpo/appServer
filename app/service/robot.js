@@ -36,7 +36,7 @@ exports.saveToQiniu = function(url, key) {
 
 exports.getQiniuToken = function(body) {
 	var type = body.type;
-	var	key = uuid.v4() + '.jpeg';
+	var	key = uuid.v4();
 	var putPolicy;
 	var options = {
 		persistentNotifyUrl: config.notify

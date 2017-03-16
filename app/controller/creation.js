@@ -13,8 +13,6 @@ var Promise = require('bluebird');
 const pageSize = 4;
 
 function AsyncMedia(videoId, audioId) {
-	console.log(videoId);
-	console.log(audioId);
 	if(!videoId) {
 		return;
 	}
@@ -180,7 +178,7 @@ exports.video = function *(next) {
 		 		video.public_id = data.public_id;
 		 		video.detail = data;
 		 		video.save().then(function(_video){
-	 				//AsyncMedia(_video.id)
+	 				AsyncMedia(_video.id)
 		 		});
 		 	}
 		 })
