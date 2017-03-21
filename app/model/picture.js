@@ -4,31 +4,18 @@ var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
 var ObjectId = Schema.Types.ObjectId;
 var Mixed = Schema.Types.Mixed;
-var Comment = mongoose.model('Comment');
 
-var CreationSchema = new Schema({
-
+var PictureSchema = new Schema({
 	author: {
 		type: ObjectId,
 		ref: 'User'
 	},
 
 	qiniu_key: String,
-
-	story: String,
-
-	voted: Boolean,
-
-	likeTotal: {
-		type: Number,
-		default: 0
+	creation: {
+		type: ObjectId,
+		ref: 'Creation'
 	},
-
-	commentTotal: {
-		type: Number,
-		default: 0
-	},
-	
 	meta: {
 		createAt: {
 			type: Date,
@@ -41,7 +28,7 @@ var CreationSchema = new Schema({
 	}
 })
 
-CreationSchema.pre('save', function(next) {
+PictureSchema.pre('save', function(next) {
 	if(this.isNew) {
 		this.meta.createAt = this.meta.updateAt = Date.now();
 	}
@@ -52,4 +39,4 @@ CreationSchema.pre('save', function(next) {
 	next();
 })
 
-module.exports = mongoose.model('Creation', CreationSchema)
+module.exports = mongoose.model('Picture', PictureSchema)

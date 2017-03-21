@@ -12,8 +12,6 @@ qiniu.conf.SECRET_KEY = config.qiniu.SK;
 
 cloudinary.config(config.cloudinary);
 
-var bucket = 'avatar';
-
 exports.saveToQiniu = function(url, key) {
 	var Client = new qiniu.rs.Client();
 
@@ -46,7 +44,10 @@ exports.getQiniuToken = function(body) {
 		//putPolicy.callbackUrl = 'http://your.domain.com/callback';
     	//putPolicy.callbackBody = 'filename=$(fname)&filesize=$(fsize)';
 		key += '.jpeg';
-		putPolicy = new qiniu.rs.PutPolicy(bucket + ':' + key);
+		putPolicy = new qiniu.rs.PutPolicy('avatar:' + key);
+	} else if(type === 'picture') {
+		key += '.jpeg';
+		putPolicy = new qiniu.rs.PutPolicy('picture:' + key);
 	} else if(type === 'video') {
 		key += '.mp4';
 		options.scope = 'video:' + key;

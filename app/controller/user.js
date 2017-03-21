@@ -85,12 +85,7 @@ exports.verify = function *(next) {
 
 		this.body = {
 			success: true,
-			data: {
-				nickName: user.nickName,
-				accessToken: user.accessToken,
-				avatar: user.avatar,
-				_id: user._id
-			}
+			data: user
 		}
 	}
 	else {

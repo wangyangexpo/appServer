@@ -9,14 +9,7 @@ var robot = require('../service/robot');
 exports.signature = function *(next) {
 
 	var body = this.request.body;
-	var cloud = body.cloud;
-	var data;
-
-	if(cloud === 'qiniu') {
-		data = robot.getQiniuToken(body);
-	} else {
-		data = robot.getCloudinaryToken(body);
-	}
+	var data = robot.getQiniuToken(body);
 
 	this.body = {
 		success: true,

@@ -3,24 +3,17 @@
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
 var ObjectId = Schema.Types.ObjectId;
-var Mixed = Schema.Types.Mixed;
 
-var AudioSchema = new Schema({
-	author: {
+var LikeSchema = new Schema({
+	userId: {
 		type: ObjectId,
 		ref: 'User'
 	},
 
-	video: {
+	creationId: {
 		type: ObjectId,
-		ref: 'Video'
+		ref: 'Creation'
 	},
-
-	qiniu_video:  String,
-	qiniu_thumb: String,
-	public_id: String,
-	detail: Mixed,
-	
 	meta: {
 		createAt: {
 			type: Date,
@@ -33,7 +26,7 @@ var AudioSchema = new Schema({
 	}
 })
 
-AudioSchema.pre('save', function(next) {
+LikeSchema.pre('save', function(next) {
 	if(this.isNew) {
 		this.meta.createAt = this.meta.updateAt = Date.now();
 	}
@@ -44,4 +37,4 @@ AudioSchema.pre('save', function(next) {
 	next();
 })
 
-module.exports = mongoose.model('Audio', AudioSchema)
+module.exports = mongoose.model('Like', LikeSchema)

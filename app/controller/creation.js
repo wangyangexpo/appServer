@@ -1,142 +1,54 @@
 'use strict'
 
 var mongoose = require('mongoose');
+var _ = require('lodash');
 
 var User = mongoose.model('User');
 var Video = mongoose.model('Video');
-var Audio = mongoose.model('Audio');
+var Picture = mongoose.model('Picture');
 var Creation = mongoose.model('Creation');
+var Comment = mongoose.model('Comment');
+var Like = mongoose.model('Like');
 var config = require('../../config/config');
 var robot = require('../service/robot');
 var Promise = require('bluebird');
 
-const pageSize = 4;
+// 列表页每次 加载 多少数据
+const listSize = 4;
+// 详情页每次加载多少 评论
+const commentSize = 4;
 
-function AsyncMedia(videoId, audioId) {
-	if(!videoId) {
-		return;
-	}
-
-	var query = {
-		_id: audioId
-	}
-
-	if(!audioId) {
-		query = {
-			video: videoId
-		}
-	}
-
-	Promise.all([
-		Video.findOne({_id: videoId}).exec(),
-				Audio.findOne(query).exec()])
-			.then(function(data) {
-				var video = data[0];
-				var audio = data[1];
-
-				console.log('检查数据');
-				if(!video || !video.public_id || !audio || !audio.public_id) {
-					return;
-				}
-				console.log('开始同步音频，视频');
-				var video_public_id = video.public_id;
-				var audio_public_id = audio.public_id.replace('/', ':');
-				var videoName = video_public_id.replace('/', '_') + '.mp4';
-				var videoUrl = 'http://res.cloudinary.com/wangyangcloud/video/upload/e_volume:-100/e_volume:400,' + 
-					'l_video:' + audio_public_id + '/' + video_public_id + '.mp4';
-				var thumbName = video_public_id.replace('/', '_') + '.jpg';
-				var thumbUrl = 'http://res.cloudinary.com/wangyangcloud/video/upload/' + video_public_id + '.jpg';
-
-				console.log('同步视频到qiniu');
-
-				robot.saveToQiniu(videoUrl, videoName)
-					.catch((err) => {
-						console.log(err);
-					})
-					.then((response) => {
-						if(response && response.key) {
-							audio.qiniu_video = response.key;
-							
-							audio.save().then(function(_audio) {
-								console.log('同步视频成功');
-							});
-						}
-					})
-
-				robot.saveToQiniu(thumbUrl, thumbName)
-					.catch((err) => {
-						console.log(err);
-					})
-					.then((response) => {
-						if(response && response.key) {
-							audio.qiniu_thumb = response.key;
-							
-							audio.save().then(function(_audio) {
-								console.log('同步封面成功');
-							});
-						}
-					})
-			})
-
-}
-
-exports.audio = function *(next) {
-
-	var _this = this;
+exports.picture = function *(next) {
 	var body = this.request.body;
-	var audioData = body.audio;
+	var pictureData = body.picture;
 	var user = this.session.user;
-	var videoId = body.videoId;
 
-	if(!audioData || !audioData.public_id) {
+	if(!pictureData || !pictureData.key) {
 		this.body = {
 			success: false,
-			err: '音频没有上传成功'
+			err: '图片没有上传成功'
 		}
 		return next;
 	}
 
-	var audio = yield Audio.findOne({
-		public_id: audioData.public_id
+	var picture = yield Picture.findOne({
+		qiniu_key: pictureData.key
 	})
 	.exec();
 
-	var video = yield Video.findOne({
-		_id: videoId
-	})
-	.exec();
-
-	if(!audio) {
-		var _audio = {
+	if(!picture) {
+		picture = new Picture({
 			author: user._id,
-			public_id: audioData.public_id,
-			detail: audioData
-		}
+			qiniu_key: pictureData.key,
+			persistentId: pictureData.persistentId
+		})
 
-		if(video) {
-			_audio.video =video._id;
-		}
+		picture = yield picture.save()
+	}
 
-		audio = new Audio(_audio);
-		audio = yield audio.save(function(err, newAudio) {
-
-			if(err) {
-				_this.body = {
-					success: false,
-					data: null
-				}
-				console.log(err)
-				return;
-			}
-
-			_this.body = {
-				success: true,
-				data: newAudio._id
-			}
-
-			console.log('newAudio' + newAudio._id);
-			AsyncMedia(videoId, newAudio._id)
-		});
+	this.body = {
+		success: true,
+		data: picture._id
 	}
 }
 
@@ -169,23 +81,6 @@ exports.video = function *(next) {
 		video = yield video.save()
 	}
 
-	var url = config.qiniu.video + video.qiniu_key;
-	
-	robot.uploadToCloudinary(url)
-		 .then((data) => {
-		 	if(data && data.public_id) {
-		 		console.log('upload video to cloudinary success');
-		 		video.public_id = data.public_id;
-		 		video.detail = data;
-		 		video.save().then(function(_video){
-	 				AsyncMedia(_video.id)
-		 		});
-		 	}
-		 })
-		 .catch((err) => {
-		 	console.log(err);
-		 })
-
 	this.body = {
 		success: true,
 		data: video._id
@@ -196,24 +91,32 @@ exports.save = function *(next) {
 	var _this = this;
 	var body = this.request.body;
 	var videoId = body.videoId;
-	var audioId = body.audioId;
-	var title = body.title;
+	var pictureId = body.pictureId;
+	var story = body.story;
 	var user = this.session.user;
-	var audio = yield Audio.findOne({
-		_id: audioId
-	})
+	var media = {};
+	if(videoId) {
+		media = yield Video.findOne({
+			_id: videoId
+		})
+		.exec();
+	} else if (pictureId) {
+		media = yield Picture.findOne({
+			_id: pictureId
+		})
+		.exec();
+	}
 
 	var creation = new Creation({
 		author: user._id,
-		videoId: videoId,
-		audioId: audioId,
-		thumb: audio.qiniu_thumb,
-		video: audio.qiniu_video,
-		title: title
+		qiniu_key: media.qiniu_key,
+		story: story
 	});
 
 	yield creation.save(function(err, creation) {
 		if(creation._id) {
+			console.log(creation);
+
 			_this.body = {
 				success: true
 			}
@@ -235,31 +138,43 @@ exports.getCreations = function *(next) {
 
 	var startId = this.query.startId;
 	var endId = this.query.endId;
-
-	var start = yield Creation.findOne({_id: startId});
-	var end = yield Creation.findOne({_id: endId});
+	var user = this.session.user;
 
 	if(page == 1) {
 		// 第一次进list
 		creations = yield Creation.find({})
-					.sort({'meta.createAt':-1})
-					.limit(pageSize);
+					.sort({'_id':-1})
+					.limit(listSize);
 	} else if(page == 0) {
 		// 顶部刷新 获取最新的数据
 		creations = yield Creation.find({})
-					.where('meta.createAt').gt(start.meta.createAt)
-					.sort({'meta.createAt': 1})
-					.limit(pageSize);
+					.where('_id').gt(startId)
+					.sort({'_id': 1})
+					.limit(listSize);
 		creations = creations.reverse();
 	} else {
 		// 底部刷新 获取历史数据
 		creations = yield Creation.find({})
-					.where('meta.createAt').lt(end.meta.createAt)
-					.sort({'meta.createAt': -1})
-					.limit(pageSize);
+					.where('_id').lt(endId)
+					.sort({'_id': -1})
+					.limit(listSize);
 	}
 
 	var len = yield Creation.find({}).count();
+
+	// 处理 点赞的情况
+	var likeList = yield Like.find({userId: user._id});
+	var clist = _.map(likeList, function(like) {
+		return like.creationId + '';
+	});
+	creations = _.map(creations, function(c) {
+		if(_.indexOf(clist, c._id + '') > -1) {
+			c.voted = true;
+		} else {
+			c.voted = false;
+		}
+		return c
+	})
 
 	_this.body = {
 		success: true,
@@ -269,17 +184,130 @@ exports.getCreations = function *(next) {
 	
 }
 
+exports.Comment = function *(next) {
+	var _this = this;
+	var user = this.session.user;
+	var body = this.request.body;
+	var creationId = body.creation;
+	var content = body.content;
+
+	var creation = yield Creation.findOne({_id: creationId});
+
+	if(creation) {
+		var comment = new Comment({
+			authorId: user._id,
+			author: user,
+			creationId: creationId,
+			creation: creation,
+			content: content
+		});
+
+		comment.save(function(err, comment) {
+			if(!err) {
+				creation.commentTotal += 1;
+				creation.save();
+			}else {
+				_this.body = {
+					success: false,
+					err: '评论保存出错'
+				}
+
+				return next;
+			}
+		})
+	} else {
+		_this.body = {
+			success: false,
+			err: '囧事没有找到'
+		}
+
+		return next;
+	}
+
+	console.log(user);
+
+	_this.body = {
+		success: true,
+		data: user
+	}
+}
+
 exports.getComments = function *(next) {
 	var _this = this;
 	var creationId = this.query.creationId;
 	var accessToken = this.query.accessToken;
 
+	var page = this.query.page;
+	var startId = this.query.startId;
+	var endId = this.query.endId;
+
+	var comments;
+
+	if(page == 1) {
+		// 第一次
+		comments = yield Comment.find({creationId: creationId})
+					.sort({'_id':-1})
+					.limit(commentSize);
+	} else {
+		// 底部刷新 获取历史数据
+		comments = yield Comment.find({creationId: creationId})
+					.where('_id').lt(endId)
+					.sort({'_id': -1})
+					.limit(commentSize);
+	}
+
+	var total = yield Comment.find({creationId: creationId}).count();
+
 	_this.body = {
 		success: true,
-		data: [],
-		total: 0
+		data: comments,
+		total: total
 	}
 	
+}
+
+exports.Like = function *(next) {
+	var _this = this;
+	var user = this.session.user;
+	var body = this.request.body;
+	var creationId = body.creationId;
+	var like = body.like;
+
+	if(like) {
+		var creation = yield Creation.findOne({_id: creationId});
+
+		if(creation) {
+			creation.likeTotal += 1;
+			creation.save();
+			var like = yield Like.findOne({
+				userId: user._id,
+				creationId: creationId
+			})
+
+			if(!like) {
+				like = new Like({
+					userId: user._id,
+					creationId: creationId
+				})
+				like.save()
+			}
+		} else {
+			_this.body = {
+				success: false,
+				err: '囧事没有找到'
+			}
+			return next;
+		}
+	} else {
+		yield Like.remove({
+				userId: user._id,
+				creationId: creationId
+			})
+	}
+
+	_this.body = {
+		success: true
+	}
 }
 
 

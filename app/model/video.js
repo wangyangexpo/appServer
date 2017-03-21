@@ -12,13 +12,10 @@ var VideoSchema = new Schema({
 	},
 
 	qiniu_key: String,
-	persistentId: String,
-	qiniu_final_key: String,
-	qiniu_detail: Mixed,
-
-	public_id: String,
-	detail: Mixed,
-	
+	creation: {
+		type: ObjectId,
+		ref: 'Creation'
+	},
 	meta: {
 		createAt: {
 			type: Date,
